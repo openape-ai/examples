@@ -1,0 +1,66 @@
+import { validateAuthorizeRequest, evaluatePolicy } from '@ddisa/idp-server'
+import type { AuthorizeParams } from '@ddisa/idp-server'
+
+export default defineEventHandler(async (event) => {
+  const query = getQuery(event)
+  const session = await getAppSession(event)
+  const { codeStore, consentStore } = useStores()
+
+  const params: AuthorizeParams = {
+    sp_id: String(query.sp_id ?? ''),
+    redirect_uri: String(query.redirect_uri ?? ''),
+    state: String(query.state ?? ''),
+    code_challenge: String(query.code_challenge ?? ''),
+    code_challenge_method: String(query.code_challenge_method ?? ''),
+    nonce: String(query.nonce ?? ''),
+    response_type: String(query.response_type ?? ''),
+  }
+
+  const error = validateAuthorizeRequest(params)
+  if (error) {
+    throw createError({ statusCode: 400, statusMessage: error })
+  }
+
+  // If user is not logged in, store params and redirect to login
+  if (!session.data.userId) {
+    const returnTo = `/authorize?${new URLSearchParams(query as Record<string, string>).toString()}`
+    await session.update({ pendingAuthorize: params, returnTo })
+    return sendRedirect(event, `/login?returnTo=${encodeURIComponent(returnTo)}`)
+  }
+
+  // User is logged in — evaluate policy (mode=open for delta-mind.at)
+  const policyMode = 'open' as const
+  const decision = await evaluatePolicy(policyMode, params.sp_id, session.data.userId, consentStore)
+
+  if (decision === 'deny') {
+    const redirectUrl = new URL(params.redirect_uri)
+    redirectUrl.searchParams.set('error', 'access_denied')
+    redirectUrl.searchParams.set('state', params.state)
+    return sendRedirect(event, redirectUrl.toString())
+  }
+
+  if (decision === 'consent') {
+    await session.update({ pendingAuthorize: params })
+    return sendRedirect(event, '/consent')
+  }
+
+  // decision === 'allow' — generate code and redirect
+  const code = crypto.randomUUID()
+  await codeStore.save({
+    code,
+    spId: params.sp_id,
+    redirectUri: params.redirect_uri,
+    codeChallenge: params.code_challenge,
+    userId: session.data.userId,
+    nonce: params.nonce,
+    expiresAt: Date.now() + 60_000,
+  })
+
+  const redirectUrl = new URL(params.redirect_uri)
+  redirectUrl.searchParams.set('code', code)
+  redirectUrl.searchParams.set('state', params.state)
+
+  await session.update({ pendingAuthorize: undefined, returnTo: undefined })
+
+  return sendRedirect(event, redirectUrl.toString())
+})
