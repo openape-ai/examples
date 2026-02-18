@@ -7,6 +7,12 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<ClawGateGrantRequest>(event)
   const { grantStore } = useStores()
 
+  // If agent token present, override requester with agent identity
+  const agentPayload = await tryAgentAuth(event)
+  if (agentPayload) {
+    body.requester = `agent:${agentPayload.sub}`
+  }
+
   if (!body.requester || !body.target || !body.grant_type) {
     throw createError({ statusCode: 400, statusMessage: 'Missing required fields: requester, target, grant_type' })
   }

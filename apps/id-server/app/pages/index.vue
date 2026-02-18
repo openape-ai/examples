@@ -49,6 +49,14 @@ async function handleLogout() {
           Manage Grants
         </NuxtLink>
 
+        <NuxtLink
+          v-if="user.isAdmin"
+          to="/admin"
+          class="block w-full bg-purple-600 text-white text-center py-2 px-4 rounded hover:bg-purple-700 transition"
+        >
+          Admin Dashboard
+        </NuxtLink>
+
         <button
           class="w-full bg-red-600 text-white py-2 px-4 rounded hover:bg-red-700 transition"
           @click="handleLogout"
@@ -61,20 +69,12 @@ async function handleLogout() {
         <p class="text-gray-600 text-center text-sm">
           Production Identity Provider for @delta-mind.at users.
         </p>
-        <div class="flex flex-col gap-2">
-          <NuxtLink
-            to="/login"
-            class="block w-full bg-blue-600 text-white text-center py-2 px-4 rounded hover:bg-blue-700 transition"
-          >
-            Login
-          </NuxtLink>
-          <NuxtLink
-            to="/register"
-            class="block w-full bg-gray-200 text-gray-800 text-center py-2 px-4 rounded hover:bg-gray-300 transition"
-          >
-            Register
-          </NuxtLink>
-        </div>
+        <NuxtLink
+          to="/login"
+          class="block w-full bg-blue-600 text-white text-center py-2 px-4 rounded hover:bg-blue-700 transition"
+        >
+          Login
+        </NuxtLink>
       </div>
     </div>
   </div>

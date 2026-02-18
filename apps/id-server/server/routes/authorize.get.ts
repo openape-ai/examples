@@ -1,5 +1,6 @@
 import { validateAuthorizeRequest, evaluatePolicy } from '@ddisa/idp-server'
 import type { AuthorizeParams } from '@ddisa/idp-server'
+import { resolveDDISA, extractDomain } from '@ddisa/core'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
@@ -28,8 +29,10 @@ export default defineEventHandler(async (event) => {
     return sendRedirect(event, `/login?returnTo=${encodeURIComponent(returnTo)}`)
   }
 
-  // User is logged in — evaluate policy (mode=open for delta-mind.at)
-  const policyMode = 'open' as const
+  // User is logged in — resolve policy mode from the user's domain DNS record
+  const userDomain = extractDomain(session.data.userId)
+  const ddisaRecord = await resolveDDISA(userDomain)
+  const policyMode = ddisaRecord?.mode ?? 'open'
   const decision = await evaluatePolicy(policyMode, params.sp_id, session.data.userId, consentStore)
 
   if (decision === 'deny') {

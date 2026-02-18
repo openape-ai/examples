@@ -1,12 +1,49 @@
+import type { ClawGateGrant } from '@ddisa/core'
+
 export default defineEventHandler(async (event) => {
-  const { grantStore } = useStores()
+  const { grantStore, agentStore } = useStores()
   const query = getQuery(event)
 
-  // Optional filter by requester
+  // Optional filter by requester (backward-compat)
   if (query.requester) {
     return await grantStore.findByRequester(String(query.requester))
   }
 
-  // Return pending grants by default
-  return await grantStore.findPending()
+  // Check if user is authenticated
+  const session = await getAppSession(event)
+  if (!session.data.userId) {
+    // Unauthenticated: backward-compat — return pending grants (for clawgate-sudo)
+    return await grantStore.findPending()
+  }
+
+  const email = session.data.userId as string
+
+  // Admin: see all grants
+  if (isAdmin(email)) {
+    return await grantStore.findAll()
+  }
+
+  // Authenticated user: see grants for agents they own or approve
+  const ownedAgents = await agentStore.findByOwner(email)
+  const approvedAgents = await agentStore.findByApprover(email)
+  const agentIds = new Set([
+    ...ownedAgents.map((a) => a.id),
+    ...approvedAgents.map((a) => a.id),
+  ])
+
+  if (agentIds.size === 0) {
+    return await grantStore.findPending()
+  }
+
+  const allGrants = await grantStore.findAll()
+  return allGrants.filter((grant: ClawGateGrant) => {
+    // Show grants from their agents
+    if (grant.request.requester.startsWith('agent:')) {
+      const agentId = grant.request.requester.slice(6)
+      if (agentIds.has(agentId)) return true
+    }
+    // Also show pending grants (they may need to approve)
+    if (grant.status === 'pending') return true
+    return false
+  })
 })

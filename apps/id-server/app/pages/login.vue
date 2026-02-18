@@ -71,8 +71,7 @@ async function handleSubmit() {
       </form>
 
       <p class="text-center text-sm text-gray-500 mt-4">
-        Don't have an account?
-        <NuxtLink to="/register" class="text-blue-600 hover:underline">Register</NuxtLink>
+        <NuxtLink to="/" class="text-blue-600 hover:underline">Back to Home</NuxtLink>
       </p>
     </div>
   </div>

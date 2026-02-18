@@ -16,10 +16,16 @@ onMounted(async () => {
     return
   }
 
-  // Check for grant callback status
+  // Check for grant callback status from URL
   if (route.query.grant_status) {
     grantStatus.value = String(route.query.grant_status)
     if (grantStatus.value === 'approved') {
+      hasPermission.value = true
+    }
+  } else {
+    // Check session for existing AuthZ-JWT (persists across refresh)
+    const status = await $fetch<{ hasAuthzJWT: boolean }>('/api/grant-status')
+    if (status.hasAuthzJWT) {
       hasPermission.value = true
     }
   }

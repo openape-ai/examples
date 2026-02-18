@@ -9,10 +9,10 @@
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {
+    "@clawgate/server": "workspace:*",
     "@ddisa/core": "workspace:*",
     "@ddisa/sp-server": "workspace:*",
-    "@ddisa/turso-stores": "workspace:*",
-    "@libsql/client": "^0.14.0",
+    "unstorage": "^1.14.4",
     "nuxt": "^3.15.0",
     "@nuxt/ui": "^3.0.0"
   },

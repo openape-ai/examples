@@ -8,5 +8,6 @@ export default defineEventHandler(async (event) => {
   return {
     email: session.data.userId,
     name: session.data.userName,
+    isAdmin: isAdmin(session.data.userId as string),
   }
 })

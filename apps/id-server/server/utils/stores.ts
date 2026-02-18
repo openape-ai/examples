@@ -1,25 +1,22 @@
-import {
-  createTursoClient,
-  TursoUserStore,
-  TursoCodeStore,
-  TursoConsentStore,
-  TursoKeyStore,
-  TursoGrantStore,
-} from '@ddisa/turso-stores'
+import { createUserStore } from './user-store'
+import { createCodeStore } from './code-store'
+import { createConsentStore } from './consent-store'
+import { createKeyStore } from './key-store'
+import { createGrantStore } from './grant-store'
+import { createAgentStore } from './agent-store'
+import { createChallengeStore } from './challenge-store'
 
 let _stores: ReturnType<typeof initStores> | null = null
 
 function initStores() {
-  const config = useRuntimeConfig()
-  const client = createTursoClient(config.tursoUrl, config.tursoAuthToken || undefined)
-
   return {
-    client,
-    userStore: new TursoUserStore(client),
-    codeStore: new TursoCodeStore(client),
-    consentStore: new TursoConsentStore(client),
-    keyStore: new TursoKeyStore(client),
-    grantStore: new TursoGrantStore(client),
+    userStore: createUserStore(),
+    codeStore: createCodeStore(),
+    consentStore: createConsentStore(),
+    keyStore: createKeyStore(),
+    grantStore: createGrantStore(),
+    agentStore: createAgentStore(),
+    challengeStore: createChallengeStore(),
   }
 }
 

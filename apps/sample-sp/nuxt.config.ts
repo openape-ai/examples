@@ -4,10 +4,7 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   devServer: { port: 3001 },
   compatibilityDate: '2025-01-01',
-  nitro: { preset: 'vercel-edge' },
   runtimeConfig: {
-    tursoUrl: '',
-    tursoAuthToken: '',
     sessionSecret: 'change-me-sp-secret-at-least-32-chars-long',
     spId: '',
     spRedirectUri: '',

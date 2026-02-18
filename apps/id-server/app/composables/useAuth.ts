@@ -1,6 +1,7 @@
 interface AuthUser {
   email: string
   name: string
+  isAdmin: boolean
 }
 
 export function useAuth() {
@@ -24,15 +25,9 @@ export function useAuth() {
       method: 'POST',
       body: { email, password },
     })
-    user.value = { email: data.email, name: data.name }
+    user.value = { email: data.email, name: data.name, isAdmin: false }
+    await fetchUser()
     return data
-  }
-
-  async function register(email: string, password: string, name: string) {
-    return await $fetch<{ ok: boolean }>('/api/register', {
-      method: 'POST',
-      body: { email, password, name },
-    })
   }
 
   async function logout() {
@@ -40,5 +35,5 @@ export function useAuth() {
     user.value = null
   }
 
-  return { user, loading, fetchUser, login, register, logout }
+  return { user, loading, fetchUser, login, logout }
 }

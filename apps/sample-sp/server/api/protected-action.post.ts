@@ -30,6 +30,17 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: `Authorization failed: ${result.error}` })
   }
 
+  // Mark grant as used on the ClawGate (prevents replay for 'once' grants)
+  if (result.claims?.grant_id) {
+    try {
+      await $fetch(`${clawgateUrl}/api/grants/${result.claims.grant_id}/use`, {
+        method: 'POST',
+      })
+    } catch {
+      // Grant may already be used or expired — the JWT verification above is the primary check
+    }
+  }
+
   return {
     success: true,
     message: 'Protected action executed successfully',

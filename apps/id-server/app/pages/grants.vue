@@ -1,8 +1,30 @@
 <script setup lang="ts">
 const { user, loading: authLoading, fetchUser } = useAuth()
 
-const grants = ref<Record<string, unknown>[]>([])
+interface Grant {
+  id: string
+  status: string
+  request: {
+    requester: string
+    target: string
+    grant_type: string
+    reason?: string
+    permissions?: string[]
+  }
+  created_at: number
+  decided_at?: number
+  decided_by?: string
+  expires_at?: number
+  used_at?: number
+}
+
+const grants = ref<Grant[]>([])
 const loading = ref(true)
+const actionError = ref('')
+
+const pendingGrants = computed(() => grants.value.filter((g) => g.status === 'pending'))
+const activeGrants = computed(() => grants.value.filter((g) => g.status === 'approved'))
+const historyGrants = computed(() => grants.value.filter((g) => !['pending', 'approved'].includes(g.status)))
 
 onMounted(async () => {
   await fetchUser()
@@ -16,12 +38,50 @@ onMounted(async () => {
 async function loadGrants() {
   loading.value = true
   try {
-    grants.value = await $fetch<Record<string, unknown>[]>('/api/grants')
+    grants.value = await $fetch<Grant[]>('/api/grants')
   } catch {
     grants.value = []
   } finally {
     loading.value = false
   }
+}
+
+async function approveGrant(id: string) {
+  actionError.value = ''
+  try {
+    await $fetch(`/api/grants/${id}/approve`, { method: 'POST' })
+    await loadGrants()
+  } catch (err: unknown) {
+    const e = err as { data?: { statusMessage?: string } }
+    actionError.value = e.data?.statusMessage ?? 'Failed to approve grant'
+  }
+}
+
+async function denyGrant(id: string) {
+  actionError.value = ''
+  try {
+    await $fetch(`/api/grants/${id}/deny`, { method: 'POST' })
+    await loadGrants()
+  } catch (err: unknown) {
+    const e = err as { data?: { statusMessage?: string } }
+    actionError.value = e.data?.statusMessage ?? 'Failed to deny grant'
+  }
+}
+
+async function revokeGrant(id: string) {
+  actionError.value = ''
+  try {
+    await $fetch(`/api/grants/${id}/revoke`, { method: 'POST' })
+    await loadGrants()
+  } catch (err: unknown) {
+    const e = err as { data?: { statusMessage?: string } }
+    actionError.value = e.data?.statusMessage ?? 'Failed to revoke grant'
+  }
+}
+
+function formatRequester(requester: string): string {
+  if (requester.startsWith('agent:')) return `Agent ${requester.slice(6, 14)}...`
+  return requester
 }
 
 function statusColor(status: string): string {
@@ -43,7 +103,7 @@ function formatTime(ts: number): string {
 
 <template>
   <div class="min-h-screen bg-gray-50 py-8 px-4">
-    <div class="max-w-4xl mx-auto">
+    <div class="max-w-5xl mx-auto">
       <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-gray-900">Grant Management</h1>
         <div class="flex gap-3">
@@ -62,38 +122,121 @@ function formatTime(ts: number): string {
         </div>
       </div>
 
-      <div v-if="loading || authLoading" class="text-center text-gray-500 mt-10">
-        Loading...
+      <div v-if="actionError" class="bg-red-50 border border-red-200 text-red-700 rounded p-3 mb-4 text-sm">
+        {{ actionError }}
       </div>
 
-      <div v-else-if="grants.length === 0" class="text-center text-gray-500 mt-10">
-        No pending grants.
-      </div>
+      <div v-if="loading || authLoading" class="text-center text-gray-500 mt-10">Loading...</div>
 
-      <div v-else class="space-y-4">
-        <div
-          v-for="grant in grants"
-          :key="(grant as any).id"
-          class="bg-white shadow rounded-lg p-4"
-        >
-          <div class="flex items-center justify-between mb-2">
-            <span class="font-mono text-xs text-gray-400">{{ (grant as any).id }}</span>
-            <span
-              class="px-2 py-1 rounded text-xs font-medium"
-              :class="statusColor((grant as any).status as string)"
-            >
-              {{ (grant as any).status }}
-            </span>
+      <template v-else>
+        <!-- Pending Requests -->
+        <section class="mb-8">
+          <h2 class="text-lg font-semibold text-gray-900 mb-3">
+            Pending Requests
+            <span class="text-sm font-normal text-gray-500">({{ pendingGrants.length }})</span>
+          </h2>
+          <div v-if="pendingGrants.length === 0" class="bg-white shadow rounded-lg p-4 text-sm text-gray-500 text-center">
+            No pending requests.
           </div>
-          <div class="text-sm space-y-1">
-            <p><span class="text-gray-500">Requester:</span> {{ (grant as any).request?.requester }}</p>
-            <p><span class="text-gray-500">Target:</span> {{ (grant as any).request?.target }}</p>
-            <p><span class="text-gray-500">Type:</span> {{ (grant as any).request?.grant_type }}</p>
-            <p v-if="(grant as any).request?.reason"><span class="text-gray-500">Reason:</span> {{ (grant as any).request?.reason }}</p>
-            <p class="text-xs text-gray-400">Created: {{ formatTime((grant as any).created_at) }}</p>
+          <div v-else class="space-y-3">
+            <div v-for="grant in pendingGrants" :key="grant.id" class="bg-white shadow rounded-lg p-4">
+              <div class="flex items-start justify-between gap-4">
+                <div class="flex-1 text-sm space-y-1">
+                  <div class="flex items-center gap-2">
+                    <span class="font-mono text-xs text-gray-400">{{ grant.id.slice(0, 8) }}...</span>
+                    <span class="px-2 py-0.5 rounded text-xs font-medium" :class="statusColor(grant.status)">
+                      {{ grant.status }}
+                    </span>
+                  </div>
+                  <p><span class="text-gray-500">Requester:</span> {{ formatRequester(grant.request.requester) }}</p>
+                  <p><span class="text-gray-500">Target:</span> {{ grant.request.target }}</p>
+                  <p><span class="text-gray-500">Type:</span> {{ grant.request.grant_type }}</p>
+                  <p v-if="grant.request.reason"><span class="text-gray-500">Reason:</span> {{ grant.request.reason }}</p>
+                  <p class="text-xs text-gray-400">Created: {{ formatTime(grant.created_at) }}</p>
+                </div>
+                <div class="flex gap-2 flex-shrink-0">
+                  <button
+                    class="px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition"
+                    @click="approveGrant(grant.id)"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    class="px-3 py-1.5 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition"
+                    @click="denyGrant(grant.id)"
+                  >
+                    Deny
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </section>
+
+        <!-- Active Permissions -->
+        <section class="mb-8">
+          <h2 class="text-lg font-semibold text-gray-900 mb-3">
+            Active Permissions
+            <span class="text-sm font-normal text-gray-500">({{ activeGrants.length }})</span>
+          </h2>
+          <div v-if="activeGrants.length === 0" class="bg-white shadow rounded-lg p-4 text-sm text-gray-500 text-center">
+            No active permissions.
+          </div>
+          <div v-else class="space-y-3">
+            <div v-for="grant in activeGrants" :key="grant.id" class="bg-white shadow rounded-lg p-4">
+              <div class="flex items-start justify-between gap-4">
+                <div class="flex-1 text-sm space-y-1">
+                  <div class="flex items-center gap-2">
+                    <span class="font-mono text-xs text-gray-400">{{ grant.id.slice(0, 8) }}...</span>
+                    <span class="px-2 py-0.5 rounded text-xs font-medium" :class="statusColor(grant.status)">
+                      {{ grant.status }}
+                    </span>
+                    <span class="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                      {{ grant.request.grant_type }}
+                    </span>
+                  </div>
+                  <p><span class="text-gray-500">Requester:</span> {{ formatRequester(grant.request.requester) }}</p>
+                  <p><span class="text-gray-500">Target:</span> {{ grant.request.target }}</p>
+                  <p v-if="grant.expires_at" class="text-xs text-gray-400">Expires: {{ formatTime(grant.expires_at) }}</p>
+                </div>
+                <button
+                  class="px-3 py-1.5 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition flex-shrink-0"
+                  @click="revokeGrant(grant.id)"
+                >
+                  Revoke
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- History -->
+        <section>
+          <h2 class="text-lg font-semibold text-gray-900 mb-3">
+            History
+            <span class="text-sm font-normal text-gray-500">({{ historyGrants.length }})</span>
+          </h2>
+          <div v-if="historyGrants.length === 0" class="bg-white shadow rounded-lg p-4 text-sm text-gray-500 text-center">
+            No history.
+          </div>
+          <div v-else class="space-y-3">
+            <div v-for="grant in historyGrants" :key="grant.id" class="bg-white shadow rounded-lg p-4 opacity-75">
+              <div class="text-sm space-y-1">
+                <div class="flex items-center gap-2">
+                  <span class="font-mono text-xs text-gray-400">{{ grant.id.slice(0, 8) }}...</span>
+                  <span class="px-2 py-0.5 rounded text-xs font-medium" :class="statusColor(grant.status)">
+                    {{ grant.status }}
+                  </span>
+                </div>
+                <p><span class="text-gray-500">Requester:</span> {{ formatRequester(grant.request.requester) }}</p>
+                <p><span class="text-gray-500">Target:</span> {{ grant.request.target }}</p>
+                <p v-if="grant.decided_by" class="text-xs text-gray-400">Decided by: {{ grant.decided_by }}</p>
+                <p class="text-xs text-gray-400">Created: {{ formatTime(grant.created_at) }}</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </template>
     </div>
   </div>
 </template>
